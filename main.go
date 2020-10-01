@@ -1,14 +1,17 @@
 package main
 
 import (
+	"context"
 	"fmt"
+	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	clientset "k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/tools/clientcmd"
 	"os"
 )
 
-const (
-	NS = "openshift"
-)
+//const (
+//	NS = "openshift"
+//)
 
 func main() {
 
@@ -119,49 +122,65 @@ func main() {
 	fmt.Printf("DisableCompression: %t\n", restConfig.DisableCompression)
 	fmt.Printf("Timeout: %f\n", restConfig.Timeout.Seconds())
 
-	//kubeClient, _ := clientset.NewForConfig(restConfig)
+	// ====================================
+	// Playing with kubeClient
+	// ====================================
+	kubeClient, _ := clientset.NewForConfig(restConfig)
 
-	/*	//====================================
-		// Listing namespaces
-		//====================================
-		nsList, err := kubeClient.CoreV1().Namespaces().List(context.TODO(), v1.ListOptions{})
+	fmt.Println("\n\n===============================================================")
+	fmt.Println("Playing with kubeClient")
+	fmt.Println("===============================================================\n")
 
-		if err != nil {
-			panic(err)
-		}
+	//====================================
+	// Listing namespaces
+	//====================================
+	nsList, err := kubeClient.CoreV1().Namespaces().List(context.TODO(), v1.ListOptions{})
 
-		for _, ns := range nsList.Items {
-			fmt.Printf("Namespace: %s\n", ns.Name)
-		}
+	if err != nil {
+		panic(err)
+	}
 
-		//====================================
-		// Listing pods
-		//====================================
-		podList, err := kubeClient.CoreV1().Pods("openshift-monitoring").List(context.TODO(), v1.ListOptions{})
+	for _, ns := range nsList.Items {
+		fmt.Printf("Namespace: %s\n", ns.Name)
+	}
 
-		if err != nil {
-			panic(err)
-		}
+	//====================================
+	// Listing pods
+	//====================================
+	podList, err := kubeClient.CoreV1().Pods("openshift-monitoring").List(context.TODO(), v1.ListOptions{})
 
-		for _, pod := range podList.Items {
-			fmt.Printf("Pod: %s", pod.Name)
-		}
+	if err != nil {
+		panic(err)
+	}
 
-		//====================================
-		// Listing Containers from Pods
-		//====================================
-		podList, err = kubeClient.CoreV1().Pods("openshift-monitoring").List(context.TODO(), v1.ListOptions{})
+	for _, pod := range podList.Items {
+		fmt.Printf("Pod: %s", pod.Name)
+	}
 
-		if err != nil {
-			panic(err)
-		}
+	//====================================
+	// Listing Containers from Pods
+	//====================================
+	podList, err = kubeClient.CoreV1().Pods("openshift-monitoring").List(context.TODO(), v1.ListOptions{})
 
-		for _, pod := range podList.Items {
-			fmt.Printf("\nPod: %s\n", pod.Name)
-			for _, cont := range pod.Spec.Containers {
-				fmt.Printf("\t- Container: %s\n", cont.Name)
-				fmt.Printf("\t\t- Resources: %s\n", cont.Resources)
+	if err != nil {
+		panic(err)
+	}
+
+	for _, pod := range podList.Items {
+		fmt.Printf("\nPod: %s\n", pod.Name)
+		for _, cont := range pod.Spec.Containers {
+			fmt.Printf("\t- Container: %s\n", cont.Name)
+			fmt.Printf("\t\t- Image: %s\n", cont.Image)
+			fmt.Printf("\t\t- Ports:\n")
+			for _, port := range cont.Ports {
+				fmt.Printf("\t\t\t - Port Name: %s\n", port.Name)
+				fmt.Printf("\t\t\t - Cont Port: %d\n", port.ContainerPort)
+				fmt.Printf("\t\t\t - Host IP: %s\n", port.HostIP)
+				fmt.Printf("\t\t\t - Host Port: %d\n", port.HostPort)
+				fmt.Printf("\t\t\t - Protocol: %s\n\n", port.Protocol)
 			}
-		}*/
+
+		}
+	}
 
 }
