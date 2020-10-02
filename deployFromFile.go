@@ -1,0 +1,269 @@
+package main
+
+import (
+	"encoding/json"
+	"fmt"
+	v1core "k8s.io/api/core/v1"
+	"k8s.io/client-go/kubernetes"
+)
+
+const (
+	simpleic = `
+kind: Template
+apiVersion: v1
+metadata:
+  name: amq-interconnect-1-basic
+  annotations:
+    description: Application template for Red Hat AMQ Interconnect Router.
+    iconClass: icon-amq
+    openshift.io/provider-display-name: Red Hat, Inc.
+    tags: messaging,amq
+    openshift.io/display-name: Red Hat AMQ Interconnect Router 1.x
+labels:
+  template: amq-interconnect-1-basic
+message: A new messaging service has been created in your project.
+parameters:
+- displayName: Application Name
+  description: The name of the application.
+  name: APPLICATION_NAME
+  value: amq-interconnect
+  required: true
+- displayName: Image Stream Namespace
+  description: The namespace in which the image streams for Red Hat Middleware images are
+    installed. These image streams are normally installed in the openshift namespace.
+    You should only need to modify this if you installed the image streams in a
+    different namespace/project.
+  name: IMAGE_STREAM_NAMESPACE
+  value: openshift
+- displayName: Image Name
+  description: The name of the AMQ Interconnect image to use. This can usually be left as
+               the default value
+  name: IMAGE_NAME
+  value: amq-interconnect:latest
+- displayName: qdrouterd.conf
+  description: The router configuration file.
+  name: QDROUTERD_CONF
+  value: |-
+    router {
+        mode: interior
+        id: ${HOSTNAME}
+    }
+
+    listener {
+        host: 0.0.0.0
+        port: amqp
+        authenticatePeer: no
+        saslMechanisms: ANONYMOUS
+    }
+
+    listener {
+      host: 0.0.0.0
+      port: 55672
+      role: inter-router
+      authenticatePeer: no
+      saslMechanisms: ANONYMOUS
+    }
+
+    sslProfile {
+       name: service_tls
+       certFile: /etc/qpid-dispatch-certs/tls.crt
+       privateKeyFile: /etc/qpid-dispatch-certs/tls.key
+    }
+
+    listener {
+        host: 0.0.0.0
+        port: amqps
+        authenticatePeer: no
+        saslMechanisms: ANONYMOUS
+        sslProfile: service_tls
+    }
+
+    listener {
+        host: 0.0.0.0
+        port: 8672
+        authenticatePeer: no
+        saslMechanisms: ANONYMOUS
+        sslProfile: service_tls
+        http: true
+        httpRootDir: /usr/share/qpid-dispatch/console
+    }
+
+    address {
+        prefix: closest
+        distribution: closest
+    }
+
+    address {
+        prefix: multicast
+        distribution: multicast
+    }
+
+    address {
+        prefix: unicast
+        distribution: closest
+    }
+
+    address {
+        prefix: exclusive
+        distribution: closest
+    }
+
+    address {
+        prefix: broadcast
+        distribution: multicast
+    }
+
+objects:
+- kind: Service
+  apiVersion: v1
+  metadata:
+    name: ${APPLICATION_NAME}
+    labels:
+      application: ${APPLICATION_NAME}
+    annotations:
+      description: The router's AMQP port.
+      service.alpha.openshift.io/serving-cert-secret-name: ${APPLICATION_NAME}-cert
+  spec:
+    ports:
+    - port: 5672
+      name: amqp
+      targetPort: 5672
+    - port: 5671
+      name: amqps
+      targetPort: 5671
+    - port: 8672
+      name: http
+      targetPort: 8672
+    - port: 55672
+      name: inter-router
+      targetPort: 55672
+    selector:
+      deploymentConfig: ${APPLICATION_NAME}
+- kind: DeploymentConfig
+  apiVersion: v1
+  metadata:
+    name: "${APPLICATION_NAME}"
+    labels:
+      application: "${APPLICATION_NAME}"
+  spec:
+    strategy:
+      type: Rolling
+      rollingParams:
+        maxSurge: 0
+    triggers:
+    - type: ImageChange
+      imageChangeParams:
+        automatic: true
+        containerNames:
+        - "${APPLICATION_NAME}"
+        from:
+          kind: ImageStreamTag
+          namespace: "${IMAGE_STREAM_NAMESPACE}"
+          name: ${IMAGE_NAME}
+    - type: ConfigChange
+    replicas: 1
+    selector:
+      deploymentConfig: "${APPLICATION_NAME}"
+    template:
+      metadata:
+        name: "${APPLICATION_NAME}"
+        labels:
+          deploymentConfig: "${APPLICATION_NAME}"
+          application: "${APPLICATION_NAME}"
+      spec:
+        serviceAccountName: ${APPLICATION_NAME}
+        terminationGracePeriodSeconds: 60
+        containers:
+        - name: "${APPLICATION_NAME}"
+          ports:
+          - name: amqp
+            containerPort: 5672
+            protocol: TCP
+          - name: amqps
+            containerPort: 5671
+            protocol: TCP
+          - name: http
+            containerPort: 8080
+            protocol: TCP
+          - name: inter
+            containerPort: 55672
+            protocol: TCP
+          env:
+          - name: APPLICATION_NAME
+            value: "${APPLICATION_NAME}"
+          - name: QDROUTERD_CONF
+            value: "/etc/qpid-dispatch/qdrouterd.conf"
+          - name: QDROUTERD_AUTO_MESH_DISCOVERY
+            value: "QUERY"
+          - name: POD_NAMESPACE
+            valueFrom:
+              fieldRef:
+                fieldPath: metadata.namespace
+          - name: POD_IP
+            valueFrom:
+              fieldRef:
+                fieldPath: status.podIP
+            image: ${IMAGE_NAME}
+          volumeMounts:
+          - name: certs
+            readOnly: true
+            mountPath: /etc/qpid-dispatch-certs/
+          - name: config-volume
+            mountPath: /etc/qpid-dispatch/
+          terminationGracePeriodSeconds: 60
+          readinessProbe:
+            httpGet:
+              path: /
+              port: 8672
+          livenessProbe:
+            httpGet:
+              path: /
+              port: 8672
+        volumes:
+        - name: certs
+          secret:
+            secretName: ${APPLICATION_NAME}-cert
+        - name: config-volume
+          configMap:
+            name: ${APPLICATION_NAME}
+        imagePullPolicy: Always
+- kind: ServiceAccount
+  apiVersion: v1
+  metadata:
+    name: ${APPLICATION_NAME}
+    labels:
+      application: "${APPLICATION_NAME}"
+- kind: RoleBinding
+  apiVersion: v1
+  metadata:
+    name: ${APPLICATION_NAME}-view
+    labels:
+      application: "${APPLICATION_NAME}"
+  subjects:
+  - kind: ServiceAccount
+    name: ${APPLICATION_NAME}
+  roleRef:
+    name: "view"
+- kind: ConfigMap
+  apiVersion: v1
+  metadata:
+    name: ${APPLICATION_NAME}
+    labels:
+      application: ${APPLICATION_NAME}
+  data:
+    qdrouterd.conf: ${QDROUTERD_CONF}`
+)
+
+func CreatePodFromYaml(kubeClient *kubernetes.Clientset, podAsYaml string, ns string) error {
+	var p v1core.Pod
+	err := json.Unmarshal([]byte(podAsYaml), &p)
+	if err != nil {
+		return err
+	}
+	pod, poderr := kubeClient.CoreV1().Pods(ns).Create(&p)
+	if poderr != nil {
+		return poderr
+	}
+	fmt.Printf("Created Pod %q.\n", pod.GetObjectMeta().GetName())
+	return nil
+}
