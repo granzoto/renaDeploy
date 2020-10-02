@@ -70,9 +70,10 @@ func main() {
 
 	for _, svc := range svcs.Items {
 		fmt.Printf("Service %s\n", svc.Name)
-		fmt.Printf("Service Status %s\n", svc.Status)
-		// How to get the service status correctly
-		
+		fmt.Printf("Service Ports : \n")
+		for _, port := range svc.Spec.Ports {
+			fmt.Printf("\tPort: %d - Name: %s - Proto:%s\n", port.Port, port.Name, port.Protocol)
+		}
 		//fmt.Printf("Available Replicas %d\n", dep.Status.AvailableReplicas)
 		// Check what else we need to get from the deployment
 	}
