@@ -18,169 +18,62 @@ func main() {
 	// ====================================
 	// Playing with config
 	// ====================================
-	config, _ := clientcmd.LoadFromFile("/home/rgranzot/.kube/config-oneOCP46")
 	//config, _ := clientcmd.LoadFromFile("/home/rgranzot/.kube/config-amqicocp45")
 	//config, _ := clientcmd.LoadFromFile("/home/rgranzot/.kube/config-minikube-localhost")
 	//config, _ := clientcmd.LoadFromFile("/home/rgranzot/.kube/config")
-
-	fmt.Println("===============================================================")
-	fmt.Println("Playing with config")
-	fmt.Println("===============================================================")
-
-	// Kind
-	fmt.Printf("Kind: %s\n", config.Kind)
-
-	// APIVersion
-	fmt.Printf("APIVersion: %s\n", config.APIVersion)
-
-	// Preferences
-	fmt.Printf("Preferences - Colors: %t\n", config.Preferences.Colors)
-
-	// Clusters
-	fmt.Printf("Clusters in config: \n")
-	for _, clust := range config.Clusters {
-		fmt.Printf("\tServer: %s\n", clust.Server)
-		fmt.Printf("\tLocation: %s\n", clust.LocationOfOrigin)
-		fmt.Printf("\tCertAuth: %s\n", clust.CertificateAuthority)
-		fmt.Printf("\tSkipTLS: %t\n\n", clust.InsecureSkipTLSVerify)
-	}
-
-	// AuthInfos
-	fmt.Printf("\nAuthInfos in cluster: \n")
-	for _, auth := range config.AuthInfos {
-		fmt.Printf("\tImpersonate: %s\n", auth.Impersonate)
-		fmt.Printf("\tLocation: %s\n", auth.LocationOfOrigin)
-		fmt.Printf("\tUsername: %s\n", auth.Username)
-		fmt.Printf("\tAuthProvider: %s\n", auth.AuthProvider)
-		fmt.Printf("\tClientKey: %s\n\n", auth.ClientKey)
-	}
-
-	// Contexts
-	fmt.Printf("\nContexts in cluster: \n")
-	for _, cont := range config.Contexts {
-		fmt.Printf("\tCluster: %s\n", cont.Cluster)
-		fmt.Printf("\tLocation: %s\n", cont.LocationOfOrigin)
-		fmt.Printf("\tAuthInfo: %s\n", cont.AuthInfo)
-		fmt.Printf("\tNamespace: %s\n", cont.Namespace)
-		fmt.Printf("\tLocation: %s\n\n", cont.LocationOfOrigin)
-	}
-
-	// Current Context
-	fmt.Printf("\nCurrentContext: %s\n", config.CurrentContext)
-
-	// Extensions
-	fmt.Printf("Extensions: %s\n", config.Extensions)
+	config, _ := clientcmd.LoadFromFile("/home/rgranzot/.kube/config-oneOCP46")
+    //configFun(config)
 
 	// ====================================
 	// Playing with clientConfig
 	// ====================================
 	clientConfig := clientcmd.NewDefaultClientConfig(*config, &clientcmd.ConfigOverrides{})
-
-	fmt.Println("\n\n===============================================================")
-	fmt.Println("Playing with clientConfig")
-	fmt.Println("===============================================================")
-
-	ns, override, err := clientConfig.Namespace()
-	if err != nil {
-		fmt.Printf("Unable to retrieve namespace from clientConfig")
-		os.Exit(1)
-	}
-
-	fmt.Printf("Namespace from clientConfig : %s\n", ns)
-	if override == true {
-		fmt.Println("It was overwritten\n")
-	}
-
-	rc, err := clientConfig.RawConfig()
-	if err != nil {
-		fmt.Printf("Unable to retrieve RawConfig from clientConfig")
-		os.Exit(1)
-	}
-	fmt.Printf("CurrentContext from Rawconfig from clientConfig : %s\n", rc.CurrentContext)
+    //clientConfigsFun(clientConfig)
 
 	// ====================================
 	// Playing with restConfig
 	// ====================================
 	restConfig, _ := clientConfig.ClientConfig()
-
-	fmt.Println("\n\n===============================================================")
-	fmt.Println("Playing with restConfig")
-	fmt.Println("===============================================================\n")
-
-	fmt.Printf("Host: %s\n", restConfig.Host)
-	fmt.Printf("APIPath: %s\n", restConfig.APIPath)
-	fmt.Printf("ContentConfig: %s\n", restConfig.ContentConfig)
-	fmt.Printf("Username: %s\n", restConfig.Username)
-	fmt.Printf("Password: %s\n", restConfig.Password)
-	fmt.Printf("BearerToken: %s\n", restConfig.BearerToken)
-	fmt.Printf("BearerTokenFile: %s\n", restConfig.BearerTokenFile)
-	fmt.Printf("Impersonate: %s\n", restConfig.Impersonate.UserName)
-	//fmt.Printf("AuthProvider: %s\n", restConfig.AuthProvider.Name)
-	//fmt.Printf("ExecProvider: %s\n", restConfig.ExecProvider.Command)
-	fmt.Printf("TLSClientConfig: %s\n", restConfig.TLSClientConfig.ServerName)
-	fmt.Printf("UserAgent: %s\n", restConfig.UserAgent)
-	fmt.Printf("DisableCompression: %t\n", restConfig.DisableCompression)
-	fmt.Printf("Timeout: %f\n", restConfig.Timeout.Seconds())
+    //restConfigFun(restConfig)
 
 	// ====================================
 	// Playing with kubeClient
 	// ====================================
 	kubeClient, _ := clientset.NewForConfig(restConfig)
+	//listResources(kubeClient)
 
-	fmt.Println("\n\n===============================================================")
-	fmt.Println("Playing with kubeClient")
-	fmt.Println("===============================================================\n")
+	// ====================================
+	// Create Interconnect Deployment
+	// Using a yaml
+	// ====================================
 
-	//====================================
-	// Listing namespaces
-	//====================================
-	nsList, err := kubeClient.CoreV1().Namespaces().List(context.TODO(), v1.ListOptions{})
 
+	// Check the Deployment replicas - Note that I deployed IC froma yaml file manually, ATM
+	deps, err := kubeClient.AppsV1().Deployments("bundlenato46").List(context.TODO(), v1.ListOptions{})
 	if err != nil {
-		panic(err)
+		fmt.Println("Unable to retrieve deployments")
+		os.Exit(1)
 	}
 
-	for _, ns := range nsList.Items {
-		fmt.Printf("Namespace: %s\n", ns.Name)
+	for _, dep := range deps.Items {
+		fmt.Printf("Deployment %s\n", dep.Name)
+		fmt.Printf("Desired Replicas %d\n", dep.Status.Replicas)
+		fmt.Printf("Available Replicas %d\n", dep.Status.AvailableReplicas)
+		// Check what else we need to get from the deployment
 	}
 
-	//====================================
-	// Listing pods
-	//====================================
-	podList, err := kubeClient.CoreV1().Pods("openshift-monitoring").List(context.TODO(), v1.ListOptions{})
-
+	svcs, err := kubeClient.CoreV1().Services("bundlenato46").List(context.TODO(), v1.ListOptions{})
 	if err != nil {
-		panic(err)
+		fmt.Println("Unable to retrieve services")
+		os.Exit(1)
 	}
 
-	for _, pod := range podList.Items {
-		fmt.Printf("Pod: %s", pod.Name)
+	for _, svc := range svcs.Items {
+		fmt.Printf("Service %s\n", svc.Name)
+		fmt.Printf("Service Status %s\n", svc.Status)
+		// How to get the service status correctly
+		
+		//fmt.Printf("Available Replicas %d\n", dep.Status.AvailableReplicas)
+		// Check what else we need to get from the deployment
 	}
-
-	//====================================
-	// Listing Containers from Pods
-	//====================================
-	podList, err = kubeClient.CoreV1().Pods("openshift-monitoring").List(context.TODO(), v1.ListOptions{})
-
-	if err != nil {
-		panic(err)
-	}
-
-	for _, pod := range podList.Items {
-		fmt.Printf("\nPod: %s\n", pod.Name)
-		for _, cont := range pod.Spec.Containers {
-			fmt.Printf("\t- Container: %s\n", cont.Name)
-			fmt.Printf("\t\t- Image: %s\n", cont.Image)
-			fmt.Printf("\t\t- Ports:\n")
-			for _, port := range cont.Ports {
-				fmt.Printf("\t\t\t - Port Name: %s\n", port.Name)
-				fmt.Printf("\t\t\t - Cont Port: %d\n", port.ContainerPort)
-				fmt.Printf("\t\t\t - Host IP: %s\n", port.HostIP)
-				fmt.Printf("\t\t\t - Host Port: %d\n", port.HostPort)
-				fmt.Printf("\t\t\t - Protocol: %s\n\n", port.Protocol)
-			}
-
-		}
-	}
-
 }
